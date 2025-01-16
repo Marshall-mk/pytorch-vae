@@ -8,3 +8,10 @@ __pycache__/
 .ipynb_checkpoints/
 
 Run.ipynb
+
+class_0/
+class_1/
+class_2/
+synthetic_class_0.png
+synthetic_class_1.png
+synthetic_class_2.png

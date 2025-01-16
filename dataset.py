@@ -1,27 +1,105 @@
 import os
-import torch
-from torch import Tensor
-from pathlib import Path
 from typing import List, Optional, Sequence, Union, Any, Callable
 from torchvision.datasets.folder import default_loader
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.datasets import CelebA
-import zipfile
-
-
-# Add your custom dataset class here
+from PIL import Image
+import os
+import numpy as np
+import torch.nn.functional as F
+import torch
 class MyDataset(Dataset):
-    def __init__(self):
-        pass
-    
-    
+    def __init__(self, image_dir, transform=None):
+        """
+        Args:
+            image_dir (str): Path to the directory containing images and labels.
+            transform (callable, optional): Optional transform to be applied on a sample.
+        """
+        self.image_dir = image_dir
+        self.transform = transform
+        self.image_paths = []  # List to hold all image file paths
+        self.labels = []       # List to hold corresponding labels
+        
+        # Walk through directory, assuming class subdirectories
+        for label, class_dir in enumerate(sorted(os.listdir(image_dir))):
+            class_path = os.path.join(image_dir, class_dir)
+            if os.path.isdir(class_path):
+                for img_file in os.listdir(class_path):
+                    self.image_paths.append(os.path.join(class_path, img_file))
+                    self.labels.append(label)
+
+        self.num_classes = len(set(self.labels))  # Determine the number of classes
+
     def __len__(self):
-        pass
-    
+        """Returns the total number of samples in the dataset."""
+        return len(self.image_paths)
+
     def __getitem__(self, idx):
-        pass
+        """
+        Args:
+            idx (int): Index of the item to fetch.
+        Returns:
+            dict: A dictionary with 'image' and 'label'.
+        """
+        image_path = self.image_paths[idx]
+        label = self.labels[idx]
+
+        # Open the image
+        image = Image.open(image_path).convert("RGB")
+
+        # Apply transform (if any)
+        if self.transform:
+            image = self.transform(image)
+
+        # One-hot encode the label
+        label = F.one_hot(torch.tensor(label), num_classes=self.num_classes).float()
+
+        return image, label
+    
+# class MyDataset(Dataset):
+#     def __init__(self, image_dir, transform=None):
+#         """
+#         Args:
+#             image_dir (str): Path to the directory containing images and labels.
+#             transform (callable, optional): Optional transform to be applied on a sample.
+#         """
+#         self.image_dir = image_dir
+#         self.transform = transform
+#         self.image_paths = []  # List to hold all image file paths
+#         self.labels = []       # List to hold corresponding labels
+        
+#         # Walk through directory, assuming class subdirectories
+#         for label, class_dir in enumerate(sorted(os.listdir(image_dir))):
+#             class_path = os.path.join(image_dir, class_dir)
+#             if os.path.isdir(class_path):
+#                 for img_file in os.listdir(class_path):
+#                     self.image_paths.append(os.path.join(class_path, img_file))
+#                     self.labels.append(label)
+
+#     def __len__(self):
+#         """Returns the total number of samples in the dataset."""
+#         return len(self.image_paths)
+
+#     def __getitem__(self, idx):
+#         """
+#         Args:
+#             idx (int): Index of the item to fetch.
+#         Returns:
+#             dict: A dictionary with 'image' and 'label'.
+#         """
+#         image_path = self.image_paths[idx]
+#         label = self.labels[idx]
+
+#         # Open the image
+#         image = Image.open(image_path).convert("RGB")
+
+#         # Apply transform (if any)
+#         if self.transform:
+#             image = self.transform(image)
+
+#         return image, label
 
 
 class MyCelebA(CelebA):
@@ -35,33 +113,6 @@ class MyCelebA(CelebA):
     def _check_integrity(self) -> bool:
         return True
     
-    
-
-class OxfordPets(Dataset):
-    """
-    URL = https://www.robots.ox.ac.uk/~vgg/data/pets/
-    """
-    def __init__(self, 
-                 data_path: str, 
-                 split: str,
-                 transform: Callable,
-                **kwargs):
-        self.data_dir = Path(data_path) / "OxfordPets"        
-        self.transforms = transform
-        imgs = sorted([f for f in self.data_dir.iterdir() if f.suffix == '.jpg'])
-        
-        self.imgs = imgs[:int(len(imgs) * 0.75)] if split == "train" else imgs[int(len(imgs) * 0.75):]
-    
-    def __len__(self):
-        return len(self.imgs)
-    
-    def __getitem__(self, idx):
-        img = default_loader(self.imgs[idx])
-        
-        if self.transforms is not None:
-            img = self.transforms(img)
-        
-        return img, 0.0 # dummy datat to prevent breaking 
 
 class VAEDataset(LightningDataModule):
     """
@@ -98,58 +149,26 @@ class VAEDataset(LightningDataModule):
         self.pin_memory = pin_memory
 
     def setup(self, stage: Optional[str] = None) -> None:
-#       =========================  OxfordPets Dataset  =========================
-            
-#         train_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
-#                                               transforms.CenterCrop(self.patch_size),
-# #                                               transforms.Resize(self.patch_size),
-#                                               transforms.ToTensor(),
-#                                                 transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-        
-#         val_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
-#                                             transforms.CenterCrop(self.patch_size),
-# #                                             transforms.Resize(self.patch_size),
-#                                             transforms.ToTensor(),
-#                                               transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-
-#         self.train_dataset = OxfordPets(
-#             self.data_dir,
-#             split='train',
-#             transform=train_transforms,
-#         )
-        
-#         self.val_dataset = OxfordPets(
-#             self.data_dir,
-#             split='val',
-#             transform=val_transforms,
-#         )
         
 #       =========================  CelebA Dataset  =========================
-    
+        mean = np.array([0.6104, 0.5033, 0.4965])
+        std = np.array([0.2507, 0.2288, 0.2383])
         train_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
-                                              transforms.CenterCrop(148),
+                                              transforms.CenterCrop(224),
                                               transforms.Resize(self.patch_size),
-                                              transforms.ToTensor(),])
+                                              transforms.ToTensor(),
+                                              transforms.Normalize(mean, std),])
         
         val_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
-                                            transforms.CenterCrop(148),
+                                            transforms.CenterCrop(224),
                                             transforms.Resize(self.patch_size),
-                                            transforms.ToTensor(),])
-        
-        self.train_dataset = MyCelebA(
-            self.data_dir,
-            split='train',
-            transform=train_transforms,
-            download=False,
-        )
-        
-        # Replace CelebA with your dataset
-        self.val_dataset = MyCelebA(
-            self.data_dir,
-            split='test',
-            transform=val_transforms,
-            download=False,
-        )
+                                            transforms.ToTensor(),
+                                            transforms.Normalize(mean, std),])
+
+        self.train_dataset = MyDataset(self.data_dir+'3_class_train/', transform=train_transforms)
+        self.val_dataset = MyDataset(self.data_dir+'3_class_val/', transform=val_transforms)
+        print(f"Train size: {len(self.train_dataset)}")
+        print(f"Val size: {len(self.val_dataset)}")
 #       ===============================================================
         
     def train_dataloader(self) -> DataLoader:

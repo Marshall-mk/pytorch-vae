@@ -2,14 +2,14 @@ model_params:
   name: 'CategoricalVAE'
   in_channels: 3
   latent_dim: 512
-  categorical_dim: 40
+  categorical_dim: 3
   temperature: 0.5
   anneal_rate: 0.00003
   anneal_interval: 100
   alpha: 1.0
 
 data_params:
-  data_path: "Data/"
+  data_path: "../../../dataset/"
   train_batch_size: 64
   val_batch_size:  64
   patch_size: 64
@@ -24,8 +24,8 @@ exp_params:
   manual_seed: 1265
 
 trainer_params:
-  gpus: [1]
-  max_epochs: 10
+  gpus: [0]
+  max_epochs: 50
 
 logging_params:
   save_dir: "logs/"
